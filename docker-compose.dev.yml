@@ -1,0 +1,46 @@
+version: '3.8'
+
+# Development override file - use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  # Infrastructure only for development
+  zookeeper:
+    ports:
+      - "2181:2181"
+
+  kafka:
+    environment:
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+    ports:
+      - "9092:9092"
+
+  mysql:
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: --default-authentication-plugin=mysql_native_password --log-bin-trust-function-creators=1
+
+  # Remove microservices for development (run locally)
+  user-service:
+    profiles: ["disabled"]
+  
+  goal-service:
+    profiles: ["disabled"]
+    
+  points-service:
+    profiles: ["disabled"]
+    
+  notification-service:
+    profiles: ["disabled"]
+    
+  challenge-service:
+    profiles: ["disabled"]
+    
+  api-gateway:
+    profiles: ["disabled"]
+    
+  frontend:
+    profiles: ["disabled"]

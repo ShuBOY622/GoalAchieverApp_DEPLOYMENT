@@ -1,0 +1,298 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: goalapp-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: goalapp-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  mysql:
+    image: mysql:8.0
+    container_name: goalapp-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: goalapp_user
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Microservices
+  user-service:
+    build:
+      context: ./goal-app-backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: user-service
+    container_name: goalapp-user-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_user
+      - SPRING_DATASOURCE_USERNAME=D3_87069_Shubham
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  goal-service:
+    build:
+      context: ./goal-app-backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: goal-service
+    container_name: goalapp-goal-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_goal
+      - SPRING_DATASOURCE_USERNAME=D3_87069_Shubham
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  points-service:
+    build:
+      context: ./goal-app-backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: points-service
+    container_name: goalapp-points-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_points
+      - SPRING_DATASOURCE_USERNAME=D3_87069_Shubham
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8083
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  notification-service:
+    build:
+      context: ./goal-app-backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: notification-service
+    container_name: goalapp-notification-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_notifications
+      - SPRING_DATASOURCE_USERNAME=D3_87069_Shubham
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8084
+    ports:
+      - "8084:8084"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  challenge-service:
+    build:
+      context: ./goal-app-backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: challenge-service
+    container_name: goalapp-challenge-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_challenges
+      - SPRING_DATASOURCE_USERNAME=D3_87069_Shubham
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8085
+    ports:
+      - "8085:8085"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  api-gateway:
+    build:
+      context: ./goal-app-backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: api-gateway
+    container_name: goalapp-api-gateway
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8080
+      - USER_SERVICE_URL=http://user-service:8081
+      - GOAL_SERVICE_URL=http://goal-service:8082
+      - POINTS_SERVICE_URL=http://points-service:8083
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8084
+      - CHALLENGE_SERVICE_URL=http://challenge-service:8085
+    ports:
+      - "8080:8080"
+    depends_on:
+      user-service:
+        condition: service_healthy
+      goal-service:
+        condition: service_healthy
+      points-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      challenge-service:
+        condition: service_healthy
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Frontend
+  frontend:
+    build:
+      context: ./goal-app-frontend
+      dockerfile: Dockerfile
+    container_name: goalapp-frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+    ports:
+      - "3000:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - goalapp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  goalapp-network:
+    driver: bridge
+    name: goalapp-network
+
+volumes:
+  mysql-data:
+    name: goalapp-mysql-data
+  kafka-data:
+    name: goalapp-kafka-data
+  zookeeper-data:
+    name: goalapp-zookeeper-data
+  zookeeper-logs:
+    name: goalapp-zookeeper-logs

@@ -1,0 +1,17 @@
+[Unit]
+Description=Goal App Docker Compose Service
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/ubuntu/GoalApp_backup
+ExecStart=/usr/local/bin/docker-compose -f docker-compose.yml -f docker-compose.ec2.yml up -d
+ExecStop=/usr/local/bin/docker-compose -f docker-compose.yml -f docker-compose.ec2.yml down
+TimeoutStartSec=0
+User=ubuntu
+Group=ubuntu
+
+[Install]
+WantedBy=multi-user.target

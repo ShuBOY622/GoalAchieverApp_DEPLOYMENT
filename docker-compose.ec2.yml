@@ -1,0 +1,214 @@
+# EC2 Production Docker Compose Override
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.ec2.yml up -d
+
+version: '3.8'
+
+services:
+  # Update Kafka for EC2 deployment
+  kafka:
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      # Add EC2 specific configurations
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+
+  # Update MySQL for production
+  mysql:
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-your_secure_root_password}
+      MYSQL_DATABASE: goalapp_user
+      MYSQL_USER: ${MYSQL_USER:-goalapp_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-your_secure_db_password}
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=256M
+      --innodb-log-file-size=64M
+      --max-connections=200
+      --query-cache-size=32M
+      --query-cache-type=1
+
+  # Update all microservices with production settings
+  user-service:
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_user
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER:-goalapp_user}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:-your_secure_db_password}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8081
+      - JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  goal-service:
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_goal
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER:-goalapp_user}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:-your_secure_db_password}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8082
+      - JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  points-service:
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_points
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER:-goalapp_user}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:-your_secure_db_password}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8083
+      - JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  notification-service:
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_notifications
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER:-goalapp_user}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:-your_secure_db_password}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8084
+      - JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  challenge-service:
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/goalapp_challenges
+      - SPRING_DATASOURCE_USERNAME=${MYSQL_USER:-goalapp_user}
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_PASSWORD:-your_secure_db_password}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8085
+      - JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api-gateway:
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8080
+      - USER_SERVICE_URL=http://user-service:8081
+      - GOAL_SERVICE_URL=http://goal-service:8082
+      - POINTS_SERVICE_URL=http://points-service:8083
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8084
+      - CHALLENGE_SERVICE_URL=http://challenge-service:8085
+      - JAVA_OPTS=-Xmx256m -Xms128m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Update frontend with EC2 public IP
+  frontend:
+    environment:
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8080}
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Add resource limits to infrastructure services
+  zookeeper:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  kafka:
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  mysql:
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
